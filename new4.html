@@ -1,0 +1,318 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Invoice - PPR PARLOUR</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+
+<style>
+body {
+  background:#f3f4f6;
+  font-family:Segoe UI,Roboto,Arial,sans-serif;
+  margin:0; padding:20px;
+}
+#invoice {
+  width:210mm; min-height:297mm; background:#fff; color:#000;
+  border:3px solid #000; border-radius:10px; margin:auto; padding:15px;
+  box-shadow:0 0 10px rgba(0,0,0,0.2);
+  display:flex; flex-direction:column;
+}
+.header-title {
+  text-align:center; border-bottom:3px double #000;
+  padding-bottom:5px; margin-bottom:10px;
+}
+.header-title h1 { margin:0; font-size:26px; font-weight:800; }
+.header-title h2 { margin:2px 0; font-size:16px; font-style:italic; font-weight:600; }
+.header-title p { margin:2px 0; font-size:13px; }
+.header-title .contact { margin-top:5px; font-weight:600; }
+
+.header-table { width:100%; border-collapse:collapse; }
+.header-table td { width:50%; vertical-align:top; padding:0 3px; }
+.box { border:2px solid #000; border-radius:6px; padding:8px; }
+.box label { display:block; font-weight:600; margin-top:3px; font-size:12px; }
+.box input, .box select {
+  width:100%; border:none; border-bottom:1px dashed #666; outline:none; font-size:13px;
+}
+.invoice-box-title { text-align:center; font-weight:700; font-size:18px; margin-bottom:6px; }
+
+.toolbar { text-align:center; margin:10px 0; }
+.toolbar button {
+  padding:8px 16px; border:none; border-radius:8px; margin:0 5px;
+  cursor:pointer; font-weight:600;
+}
+#addRow { background:#111; color:#fff; }
+#downloadPDF { background:#2563eb; color:#fff; }
+#printInvoice { background:#e2e8f0; color:#111; }
+
+table { width:100%; border-collapse:collapse; margin-top:10px; }
+th,td { border:1px solid #94a3b8; padding:8px 10px; font-size:12px; text-align:center; }
+th { background:#f1f5f9; }
+
+.editBtn {
+  background:#2563eb; color:#fff; border:none; border-radius:6px;
+  padding:3px 8px; cursor:pointer;
+}
+.editBtn:hover { background:#1d4ed8; }
+
+.deleteBtn {
+  background:#dc2626; color:#fff; border:none; border-radius:6px;
+  padding:3px 8px; cursor:pointer; margin-left:4px;
+}
+.deleteBtn:hover { background:#b91c1c; }
+
+#finalFooter { margin-top:auto; border-top:2px solid #000; padding-top:8px; }
+.summary { display:flex; justify-content:space-between; font-weight:600; flex-wrap:wrap; }
+.rupees { margin-top:6px; border:2px solid #000; padding:6px; border-radius:8px; }
+
+/* Modern oval toggle switch */
+.switch {
+  position:relative; display:inline-block; width:38px; height:20px;
+}
+.switch input { opacity:0; width:0; height:0; }
+.slider {
+  position:absolute; cursor:pointer; inset:0;
+  background-color:#d1d5db; border-radius:20px; transition:.3s;
+}
+.slider:before {
+  position:absolute; content:""; height:14px; width:14px;
+  left:3px; bottom:3px; background:white; border-radius:50%;
+  transition:.3s;
+}
+input:checked + .slider { background-color:#16a34a; }
+input:checked + .slider:before { transform:translateX(18px); }
+
+/* Hide edit column + toolbar during PDF export / print */
+@media print {
+  .toolbar, #editModal, .editColumn {
+    display:none !important;
+    visibility:hidden !important;
+  }
+}
+
+/* Modal */
+#editModal {
+  display:none; position:fixed; inset:0;
+  justify-content:center; align-items:center;
+  background:rgba(0,0,0,0.3);
+}
+.modal-box {
+  background:#fff; border-radius:10px; width:350px; padding:20px;
+  box-shadow:0 0 20px rgba(0,0,0,0.4);
+}
+.modal-box h3 { margin-top:0; text-align:center; color:#2563eb; }
+.modal-box label { display:block; margin-top:8px; font-weight:600; }
+.modal-box input, .modal-box select {
+  width:100%; padding:8px; border:1px solid #ccc; border-radius:6px; margin-top:3px;
+}
+.modal-actions { text-align:right; margin-top:10px; }
+.modal-actions button {
+  padding:6px 12px; margin-left:6px; border:none; border-radius:6px; cursor:pointer;
+}
+#saveRow { background:#2563eb; color:#fff; }
+#cancelRow { background:#e5e7eb; }
+
+/* 📱 Responsive Design */
+@media (max-width: 768px) {
+  body { padding: 10px; }
+  #invoice { width: 100%; border-width: 2px; padding: 10px; }
+  th, td { font-size: 10px; padding: 4px; }
+  .toolbar button {
+    display: block;
+    width: 100%;
+    margin: 5px 0;
+  }
+  .box input, .box select {
+    font-size: 11px;
+  }
+  .modal-box { width: 90%; }
+}
+</style>
+</head>
+<body>
+
+<div id="invoice">
+  <div class="header-title">
+    <h1>PPR PARLOUR</h1>
+    <h2>Heritage Milk Shop</h2>
+    <p><b>R.Logamani</b></p>
+    <p>No:49, Pillayar Kovil Street, Potheri, Maraimalainagar,</p>
+    <p>Kancheepuram, Tamil Nadu, 603203.</p>
+    <p class="contact">📞 8608405491</p>
+  </div>
+
+  <table class="header-table">
+    <tr>
+      <td>
+        <div class="box">
+          <label>Client Name</label><input type="text" value="Rousant Enterprise">
+          <label>Client Address</label><input type="text" value="5107, H2 2nd Avenue, Anna Nagar, Chennai-40">
+          <label>Client Phone</label><input type="text" placeholder="Enter client phone">
+        </div>
+      </td>
+      <td>
+        <div class="box">
+          <div class="invoice-box-title">INVOICE</div>
+          <label>Invoice No</label><input type="text" value="01">
+          <label>Invoice Date</label><input type="date">
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="toolbar">
+    <button id="addRow">+ Add Row</button>
+    <button id="downloadPDF">Download PDF</button>
+    <button id="printInvoice">Print Invoice</button>
+  </div>
+
+  <table id="table">
+    <thead>
+      <tr>
+        <th>Sl.No</th><th>Date</th><th>Type</th><th>Qty</th><th>Rate</th><th>Amount</th><th class="editColumn">Packets</th><th class="editColumn">Edit / Delete</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <div id="finalFooter">
+    <div class="summary">
+      <div>Total No of Milk Packets: <span id="packets">0</span></div>
+      <div>Total: ₹<span id="total">0</span></div>
+    </div>
+    <div class="rupees">Rupees in words: <b id="inWords">Zero</b> only</div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div id="editModal">
+  <div class="modal-box">
+    <h3>Add / Edit Row</h3>
+    <label>Sl.No</label><input type="text" id="slno">
+    <label>Date</label><input type="date" id="date">
+    <label>Type of Product</label>
+    <select id="type">
+      <option value="Heritage Milk">Heritage Milk</option>
+      <option value="Jersey Milk">Jersey Milk</option>
+      <option value="Ice Cream Cup">Ice Cream Cup</option>
+    </select>
+    <label>Qty</label><input type="text" id="qty">
+    <label>Rate</label><input type="text" id="rate">
+    <label>Amount</label><input type="text" id="amount" readonly>
+    <label>Count in Packets</label>
+    <label class="switch"><input type="checkbox" id="packetCheck"><span class="slider"></span></label>
+    <div class="modal-actions">
+      <button id="saveRow">Save</button>
+      <button id="cancelRow">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let currentRow=null;
+const modal=document.getElementById('editModal');
+const tbody=document.querySelector('#table tbody');
+
+document.getElementById('addRow').onclick=()=>{currentRow=null;clearFields();modal.style.display='flex';};
+document.getElementById('cancelRow').onclick=()=>modal.style.display='none';
+document.getElementById('qty').oninput=calcAmt;
+document.getElementById('rate').oninput=calcAmt;
+
+function calcAmt(){amount.value=((+qty.value||0)*(+rate.value||0)).toFixed(2);}
+
+document.getElementById('saveRow').onclick=()=>{
+  const formattedDate = date.value ? new Date(date.value).toLocaleDateString('en-GB').replaceAll('/', '.') : '';
+  const data=[slno.value, formattedDate, type.value, qty.value, rate.value, amount.value, packetCheck.checked];
+
+  if(currentRow){
+    const tds=currentRow.querySelectorAll('td');
+    tds[0].textContent=data[0];
+    tds[1].textContent=data[1];
+    tds[2].textContent=data[2];
+    tds[3].textContent=data[3];
+    tds[4].textContent=data[4];
+    tds[5].textContent=data[5];
+    tds[6].querySelector('input').checked=data[6];
+    currentRow.dataset.packet=data[6];
+  } else {
+    const tr=document.createElement('tr');
+    tr.dataset.packet=data[6];
+    tr.innerHTML=`
+      <td>${data[0]}</td><td>${data[1]}</td><td>${data[2]}</td>
+      <td>${data[3]}</td><td>${data[4]}</td><td>${data[5]}</td>
+      <td class="editColumn">
+        <label class="switch">
+          <input type="checkbox" ${data[6]?'checked':''}>
+          <span class="slider"></span>
+        </label>
+      </td>
+      <td class="editColumn">
+        <button class="editBtn">✏️</button>
+        <button class="deleteBtn">🗑️</button>
+      </td>`;
+    tr.querySelector('.editBtn').onclick=()=>editRow(tr);
+    tr.querySelector('.deleteBtn').onclick=()=>deleteRow(tr);
+    tr.querySelector('input[type=checkbox]').onchange=()=>{tr.dataset.packet=tr.querySelector('input').checked;recalc();};
+    tbody.appendChild(tr);
+  }
+  modal.style.display='none'; recalc();
+};
+
+function clearFields(){slno.value='';date.value='';qty.value='';rate.value='';amount.value='';type.value='Heritage Milk';packetCheck.checked=false;}
+
+function editRow(tr){
+  currentRow=tr;const t=tr.querySelectorAll('td');
+  slno.value=t[0].textContent;
+  const p=t[1].textContent.split('.');
+  date.value=p.length===3?`${p[2]}-${p[1]}-${p[0]}`:'';
+  type.value=t[2].textContent;qty.value=t[3].textContent;
+  rate.value=t[4].textContent;amount.value=t[5].textContent;
+  packetCheck.checked=t[6].querySelector('input').checked;
+  modal.style.display='flex';
+}
+
+function deleteRow(tr) {
+  if (confirm("Are you sure you want to delete this row?")) {
+    tr.remove();
+    recalc();
+  }
+}
+
+function recalc(){
+  let total=0,packets=0;
+  tbody.querySelectorAll('tr').forEach(tr=>{
+    const t=tr.querySelectorAll('td');
+    total+=parseFloat(t[5].textContent)||0;
+    if(t[6].querySelector('input').checked) packets+=parseFloat(t[3].textContent)||0;
+  });
+  document.getElementById('total').textContent=total.toFixed(2);
+  document.getElementById('packets').textContent=packets;
+  document.getElementById('inWords').textContent=inWords(total);
+}
+function inWords(num){num=Math.floor(num);
+  if(num===0)return'Zero';
+  const a=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
+  const b=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
+  const two=n=>n<20?a[n]:b[Math.floor(n/10)]+(a[n%10]?' '+a[n%10]:'');
+  const three=n=>n>=100?a[Math.floor(n/100)]+' Hundred'+(n%100?' '+two(n%100):''):two(n);
+  let str='',crore=Math.floor(num/1e7);num%=1e7;
+  let lakh=Math.floor(num/1e5);num%=1e5;let thou=Math.floor(num/1e3);num%=1e3;let hund=num;
+  if(crore)str+=three(crore)+' Crore ';if(lakh)str+=three(lakh)+' Lakh ';
+  if(thou)str+=three(thou)+' Thousand ';if(hund)str+=three(hund);
+  return str.trim();
+}
+
+document.getElementById('downloadPDF').onclick=()=>{
+  const el=document.getElementById('invoice');
+  html2pdf().set({
+    margin:0,filename:'Invoice.pdf',
+    image:{type:'jpeg',quality:1},
+    html2canvas:{scale:2,useCORS:true},
+    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
+  }).from(el).save();
+};
+document.getElementById('printInvoice').onclick=()=>window.print();
+</script>
+</body>
+</html>
