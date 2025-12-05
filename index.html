@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -14,7 +13,10 @@ body {
   margin:0; padding:20px;
 }
 #invoice {
-  width:210mm; min-height:297mm; background:#fff; color:#000;
+  width:180mm; /* reduced to avoid clipping in PDF */
+  max-width:180mm;
+  min-height:270mm;
+  background:#fff; color:#000;
   border:3px solid #000; border-radius:10px; margin:auto; padding:15px;
   box-shadow:0 0 10px rgba(0,0,0,0.2);
   display:flex; flex-direction:column;
@@ -45,6 +47,8 @@ body {
 #addRow { background:#111; color:#fff; }
 #downloadPDF { background:#2563eb; color:#fff; }
 #printInvoice { background:#e2e8f0; color:#111; }
+#saveJson { background:#16a34a; color:#fff; }
+#loadJson { background:#6b7280; color:#fff; }
 
 table { width:100%; border-collapse:collapse; margin-top:10px; }
 th,td { border:1px solid #94a3b8; padding:8px 10px; font-size:12px; text-align:center; }
@@ -83,7 +87,7 @@ th { background:#f1f5f9; }
 input:checked + .slider { background-color:#16a34a; }
 input:checked + .slider:before { transform:translateX(18px); }
 
-/* Hide edit column + toolbar during PDF export / print */
+/* Hide edit column + toolbar during PRINT */
 @media print {
   .toolbar, #editModal, .editColumn {
     display:none !important;
@@ -116,7 +120,7 @@ input:checked + .slider:before { transform:translateX(18px); }
 /* 📱 Responsive Design */
 @media (max-width: 768px) {
   body { padding: 10px; }
-  #invoice { width: 100%; border-width: 2px; padding: 10px; }
+  #invoice { width: 100%; max-width:100%; border-width: 2px; padding: 10px; }
   th, td { font-size: 10px; padding: 4px; }
   .toolbar button {
     display: block;
@@ -146,16 +150,21 @@ input:checked + .slider:before { transform:translateX(18px); }
     <tr>
       <td>
         <div class="box">
-          <label>Client Name</label><input type="text" value="Rousant Enterprise">
-          <label>Client Address</label><input type="text" value="5107, H2 2nd Avenue, Anna Nagar, Chennai-40">
-          <label>Client Phone</label><input type="text" placeholder="Enter client phone">
+          <label>Client Name</label>
+          <input id="clientName" type="text" value="Rousant Enterprise">
+          <label>Client Address</label>
+          <input id="clientAddress" type="text" value="5107, H2 2nd Avenue, Anna Nagar, Chennai-40">
+          <label>Client Phone</label>
+          <input id="clientPhone" type="text" placeholder="Enter client phone">
         </div>
       </td>
       <td>
         <div class="box">
           <div class="invoice-box-title">INVOICE</div>
-          <label>Invoice No</label><input type="text" value="01">
-          <label>Invoice Date</label><input type="date">
+          <label>Invoice No</label>
+          <input id="invoiceNo" type="text" value="01">
+          <label>Invoice Date</label>
+          <input id="invoiceDate" type="date">
         </div>
       </td>
     </tr>
@@ -165,12 +174,22 @@ input:checked + .slider:before { transform:translateX(18px); }
     <button id="addRow">+ Add Row</button>
     <button id="downloadPDF">Download PDF</button>
     <button id="printInvoice">Print Invoice</button>
+    <button id="saveJson">Save JSON</button>
+    <button id="loadJson">Load JSON</button>
+    <input type="file" id="loadJsonInput" accept="application/json" style="display:none">
   </div>
 
   <table id="table">
     <thead>
       <tr>
-        <th>Sl.No</th><th>Date</th><th>Type</th><th>Qty</th><th>Rate</th><th>Amount</th><th class="editColumn">Packets</th><th class="editColumn">Edit / Delete</th>
+        <th>Sl.No</th>
+        <th>Date</th>
+        <th>Type</th>
+        <th>Qty</th>
+        <th>Rate</th>
+        <th>Amount</th>
+        <th class="editColumn">Packets</th>
+        <th class="editColumn">Edit / Delete</th>
       </tr>
     </thead>
     <tbody></tbody>
@@ -201,7 +220,10 @@ input:checked + .slider:before { transform:translateX(18px); }
     <label>Rate</label><input type="text" id="rate">
     <label>Amount</label><input type="text" id="amount" readonly>
     <label>Count in Packets</label>
-    <label class="switch"><input type="checkbox" id="packetCheck"><span class="slider"></span></label>
+    <label class="switch">
+      <input type="checkbox" id="packetCheck">
+      <span class="slider"></span>
+    </label>
     <div class="modal-actions">
       <button id="saveRow">Save</button>
       <button id="cancelRow">Cancel</button>
@@ -210,40 +232,66 @@ input:checked + .slider:before { transform:translateX(18px); }
 </div>
 
 <script>
-let currentRow=null;
-const modal=document.getElementById('editModal');
-const tbody=document.querySelector('#table tbody');
+let currentRow = null;
+const modal = document.getElementById('editModal');
+const tbody = document.querySelector('#table tbody');
 
-document.getElementById('addRow').onclick=()=>{currentRow=null;clearFields();modal.style.display='flex';};
-document.getElementById('cancelRow').onclick=()=>modal.style.display='none';
-document.getElementById('qty').oninput=calcAmt;
-document.getElementById('rate').oninput=calcAmt;
+document.getElementById('addRow').onclick = () => {
+  currentRow = null;
+  clearFields();
+  modal.style.display = 'flex';
+};
+document.getElementById('cancelRow').onclick = () => modal.style.display = 'none';
 
-function calcAmt(){amount.value=((+qty.value||0)*(+rate.value||0)).toFixed(2);}
+document.getElementById('qty').oninput = calcAmt;
+document.getElementById('rate').oninput = calcAmt;
 
-document.getElementById('saveRow').onclick=()=>{
-  const formattedDate = date.value ? new Date(date.value).toLocaleDateString('en-GB').replaceAll('/', '.') : '';
-  const data=[slno.value, formattedDate, type.value, qty.value, rate.value, amount.value, packetCheck.checked];
+function calcAmt() {
+  amount.value = ((+qty.value || 0) * (+rate.value || 0)).toFixed(2);
+}
 
-  if(currentRow){
-    const tds=currentRow.querySelectorAll('td');
-    tds[0].textContent=data[0];
-    tds[1].textContent=data[1];
-    tds[2].textContent=data[2];
-    tds[3].textContent=data[3];
-    tds[4].textContent=data[4];
-    tds[5].textContent=data[5];
-    tds[6].querySelector('input').checked=data[6];
-    currentRow.dataset.packet=data[6];
+// Save row (new or edit)
+document.getElementById('saveRow').onclick = () => {
+  const isoDate = date.value || '';
+  const formattedDate = isoDate
+    ? new Date(isoDate).toLocaleDateString('en-GB').replaceAll('/', '.')
+    : '';
+
+  const data = [
+    slno.value,
+    formattedDate,
+    type.value,
+    qty.value,
+    rate.value,
+    amount.value,
+    packetCheck.checked
+  ];
+
+  if (currentRow) {
+    const tds = currentRow.querySelectorAll('td');
+    tds[0].textContent = data[0];
+    tds[1].textContent = data[1];
+    tds[2].textContent = data[2];
+    tds[3].textContent = data[3];
+    tds[4].textContent = data[4];
+    tds[5].textContent = data[5];
+    tds[6].querySelector('input').checked = data[6];
+    currentRow.dataset.packet = data[6];
+    currentRow.dataset.date = isoDate;
   } else {
-    const tr=document.createElement('tr');
-    tr.dataset.packet=data[6];
-    tr.innerHTML=`
-      <td>${data[0]}</td><td>${data[1]}</td><td>${data[2]}</td>
-      <td>${data[3]}</td><td>${data[4]}</td><td>${data[5]}</td>
+    const tr = document.createElement('tr');
+    tr.dataset.packet = data[6];
+    tr.dataset.date = isoDate;
+    tr.innerHTML = `
+      <td>${data[0]}</td>
+      <td>${data[1]}</td>
+      <td>${data[2]}</td>
+      <td>${data[3]}</td>
+      <td>${data[4]}</td>
+      <td>${data[5]}</td>
       <td class="editColumn">
         <label class="switch">
-          <input type="checkbox" ${data[6]?'checked':''}>
+          <input type="checkbox" ${data[6] ? 'checked' : ''}>
           <span class="slider"></span>
         </label>
       </td>
@@ -251,25 +299,50 @@ document.getElementById('saveRow').onclick=()=>{
         <button class="editBtn">✏️</button>
         <button class="deleteBtn">🗑️</button>
       </td>`;
-    tr.querySelector('.editBtn').onclick=()=>editRow(tr);
-    tr.querySelector('.deleteBtn').onclick=()=>deleteRow(tr);
-    tr.querySelector('input[type=checkbox]').onchange=()=>{tr.dataset.packet=tr.querySelector('input').checked;recalc();};
+
+    tr.querySelector('.editBtn').onclick = () => editRow(tr);
+    tr.querySelector('.deleteBtn').onclick = () => deleteRow(tr);
+    tr.querySelector('input[type=checkbox]').onchange = () => {
+      tr.dataset.packet = tr.querySelector('input').checked;
+      recalc();
+    };
     tbody.appendChild(tr);
   }
-  modal.style.display='none'; recalc();
+  modal.style.display = 'none';
+  recalc();
 };
 
-function clearFields(){slno.value='';date.value='';qty.value='';rate.value='';amount.value='';type.value='Heritage Milk';packetCheck.checked=false;}
+function clearFields() {
+  slno.value = '';
+  date.value = '';
+  qty.value = '';
+  rate.value = '';
+  amount.value = '';
+  type.value = 'Heritage Milk';
+  packetCheck.checked = false;
+}
 
-function editRow(tr){
-  currentRow=tr;const t=tr.querySelectorAll('td');
-  slno.value=t[0].textContent;
-  const p=t[1].textContent.split('.');
-  date.value=p.length===3?`${p[2]}-${p[1]}-${p[0]}`:'';
-  type.value=t[2].textContent;qty.value=t[3].textContent;
-  rate.value=t[4].textContent;amount.value=t[5].textContent;
-  packetCheck.checked=t[6].querySelector('input').checked;
-  modal.style.display='flex';
+function editRow(tr) {
+  currentRow = tr;
+  const t = tr.querySelectorAll('td');
+
+  slno.value = t[0].textContent;
+
+  // Prefer stored ISO date, fallback to parsing DD.MM.YYYY
+  if (tr.dataset.date) {
+    date.value = tr.dataset.date;
+  } else {
+    const p = t[1].textContent.split('.');
+    date.value = p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : '';
+  }
+
+  type.value = t[2].textContent;
+  qty.value = t[3].textContent;
+  rate.value = t[4].textContent;
+  amount.value = t[5].textContent;
+  packetCheck.checked = t[6].querySelector('input').checked;
+
+  modal.style.display = 'flex';
 }
 
 function deleteRow(tr) {
@@ -279,40 +352,245 @@ function deleteRow(tr) {
   }
 }
 
-function recalc(){
-  let total=0,packets=0;
-  tbody.querySelectorAll('tr').forEach(tr=>{
-    const t=tr.querySelectorAll('td');
-    total+=parseFloat(t[5].textContent)||0;
-    if(t[6].querySelector('input').checked) packets+=parseFloat(t[3].textContent)||0;
+function recalc() {
+  let total = 0, packets = 0;
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const t = tr.querySelectorAll('td');
+    total += parseFloat(t[5].textContent) || 0;
+    if (t[6].querySelector('input').checked) {
+      packets += parseFloat(t[3].textContent) || 0;
+    }
   });
-  document.getElementById('total').textContent=total.toFixed(2);
-  document.getElementById('packets').textContent=packets;
-  document.getElementById('inWords').textContent=inWords(total);
+  document.getElementById('total').textContent = total.toFixed(2);
+  document.getElementById('packets').textContent = packets;
+  document.getElementById('inWords').textContent = inWords(total);
 }
-function inWords(num){num=Math.floor(num);
-  if(num===0)return'Zero';
-  const a=['','One','Two','Three','Four','Five','Six','Seven','Eight','Nine','Ten','Eleven','Twelve','Thirteen','Fourteen','Fifteen','Sixteen','Seventeen','Eighteen','Nineteen'];
-  const b=['','','Twenty','Thirty','Forty','Fifty','Sixty','Seventy','Eighty','Ninety'];
-  const two=n=>n<20?a[n]:b[Math.floor(n/10)]+(a[n%10]?' '+a[n%10]:'');
-  const three=n=>n>=100?a[Math.floor(n/100)]+' Hundred'+(n%100?' '+two(n%100):''):two(n);
-  let str='',crore=Math.floor(num/1e7);num%=1e7;
-  let lakh=Math.floor(num/1e5);num%=1e5;let thou=Math.floor(num/1e3);num%=1e3;let hund=num;
-  if(crore)str+=three(crore)+' Crore ';if(lakh)str+=three(lakh)+' Lakh ';
-  if(thou)str+=three(thou)+' Thousand ';if(hund)str+=three(hund);
+
+function inWords(num) {
+  num = Math.floor(num);
+  if (num === 0) return 'Zero';
+  const a = [
+    '', 'One', 'Two', 'Three', 'Four', 'Five', 'Six',
+    'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve',
+    'Thirteen', 'Fourteen', 'Fifteen', 'Sixteen', 'Seventeen',
+    'Eighteen', 'Nineteen'
+  ];
+  const b = [
+    '', '', 'Twenty', 'Thirty', 'Forty', 'Fifty',
+    'Sixty', 'Seventy', 'Eighty', 'Ninety'
+  ];
+  const two = n => n < 20 ? a[n] : b[Math.floor(n / 10)] + (a[n % 10] ? ' ' + a[n % 10] : '');
+  const three = n => n >= 100
+    ? a[Math.floor(n / 100)] + ' Hundred' + (n % 100 ? ' ' + two(n % 100) : '')
+    : two(n);
+
+  let str = '';
+  let crore = Math.floor(num / 1e7); num %= 1e7;
+  let lakh = Math.floor(num / 1e5);  num %= 1e5;
+  let thou = Math.floor(num / 1e3);  num %= 1e3;
+  let hund = num;
+
+  if (crore) str += three(crore) + ' Crore ';
+  if (lakh) str += three(lakh) + ' Lakh ';
+  if (thou) str += three(thou) + ' Thousand ';
+  if (hund) str += three(hund);
   return str.trim();
 }
 
-document.getElementById('downloadPDF').onclick=()=>{
-  const el=document.getElementById('invoice');
-  html2pdf().set({
-    margin:0,filename:'Invoice.pdf',
-    image:{type:'jpeg',quality:1},
-    html2canvas:{scale:2,useCORS:true},
-    jsPDF:{unit:'mm',format:'a4',orientation:'portrait'}
-  }).from(el).save();
+/* ---------- JSON HELPERS ---------- */
+
+function displayDateFromISO(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  const dd = String(d.getDate()).padStart(2, '0');
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${dd}.${mm}.${yyyy}`;
+}
+
+function isoDateFromDisplay(display) {
+  if (!display) return '';
+  const parts = display.split('.');
+  if (parts.length === 3) {
+    const [dd, mm, yyyy] = parts;
+    return `${yyyy}-${mm.padStart(2, '0')}-${dd.padStart(2, '0')}`;
+  }
+  return '';
+}
+
+function getInvoiceData() {
+  const data = {
+    client: {
+      name: document.getElementById('clientName').value || '',
+      address: document.getElementById('clientAddress').value || '',
+      phone: document.getElementById('clientPhone').value || ''
+    },
+    invoice: {
+      number: document.getElementById('invoiceNo').value || '',
+      date: document.getElementById('invoiceDate').value || ''
+    },
+    rows: []
+  };
+
+  tbody.querySelectorAll('tr').forEach(tr => {
+    const t = tr.querySelectorAll('td');
+    if (t.length < 7) return;
+
+    const displayDate = t[1].textContent;
+    const iso = tr.dataset.date || isoDateFromDisplay(displayDate);
+    const checkbox = t[6].querySelector('input[type=checkbox]');
+    data.rows.push({
+      slno: t[0].textContent,
+      date: iso,
+      type: t[2].textContent,
+      qty: t[3].textContent,
+      rate: t[4].textContent,
+      amount: t[5].textContent,
+      packet: checkbox ? checkbox.checked : false
+    });
+  });
+
+  return data;
+}
+
+function setInvoiceData(data) {
+  if (data.client) {
+    document.getElementById('clientName').value = data.client.name || '';
+    document.getElementById('clientAddress').value = data.client.address || '';
+    document.getElementById('clientPhone').value = data.client.phone || '';
+  }
+  if (data.invoice) {
+    document.getElementById('invoiceNo').value = data.invoice.number || '';
+    document.getElementById('invoiceDate').value = data.invoice.date || '';
+  }
+
+  tbody.innerHTML = '';
+
+  if (Array.isArray(data.rows)) {
+    data.rows.forEach(row => {
+      const iso = row.date || '';
+      const display = iso ? displayDateFromISO(iso) : '';
+      const packet = !!row.packet;
+
+      const tr = document.createElement('tr');
+      tr.dataset.packet = packet;
+      tr.dataset.date = iso;
+      tr.innerHTML = `
+        <td>${row.slno || ''}</td>
+        <td>${display}</td>
+        <td>${row.type || ''}</td>
+        <td>${row.qty || ''}</td>
+        <td>${row.rate || ''}</td>
+        <td>${row.amount || ''}</td>
+        <td class="editColumn">
+          <label class="switch">
+            <input type="checkbox" ${packet ? 'checked' : ''}>
+            <span class="slider"></span>
+          </label>
+        </td>
+        <td class="editColumn">
+          <button class="editBtn">✏️</button>
+          <button class="deleteBtn">🗑️</button>
+        </td>`;
+
+      tr.querySelector('.editBtn').onclick = () => editRow(tr);
+      tr.querySelector('.deleteBtn').onclick = () => deleteRow(tr);
+      tr.querySelector('input[type=checkbox]').onchange = () => {
+        tr.dataset.packet = tr.querySelector('input').checked;
+        recalc();
+      };
+
+      tbody.appendChild(tr);
+    });
+  }
+
+  recalc();
+}
+
+/* ---------- SAVE / LOAD JSON BUTTONS ---------- */
+
+document.getElementById('saveJson').onclick = () => {
+  const data = getInvoiceData();
+  const blob = new Blob([JSON.stringify(data, null, 2)], {
+    type: 'application/json'
+  });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const invNo = document.getElementById('invoiceNo').value || 'invoice';
+  a.href = url;
+  a.download = invNo + '.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 };
-document.getElementById('printInvoice').onclick=()=>window.print();
+
+document.getElementById('loadJson').onclick = () => {
+  document.getElementById('loadJsonInput').click();
+};
+
+document.getElementById('loadJsonInput').addEventListener('change', function () {
+  const file = this.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      setInvoiceData(data);
+    } catch (err) {
+      alert('Invalid JSON file');
+    }
+  };
+  reader.readAsText(file);
+  this.value = '';
+});
+
+/* ---------- PDF + PRINT ---------- */
+
+document.getElementById('downloadPDF').onclick = () => {
+  const invoiceEl = document.getElementById('invoice');
+
+  // Temporary style to avoid cut in PDF
+  const prevWidth = invoiceEl.style.width;
+  const prevMaxWidth = invoiceEl.style.maxWidth;
+  const prevOverflow = invoiceEl.style.overflow;
+
+  invoiceEl.style.width = "180mm";
+  invoiceEl.style.maxWidth = "180mm";
+  invoiceEl.style.overflow = "hidden";
+
+  // Hide toolbar + edit/delete + packets column only for PDF
+  const elementsToHide = document.querySelectorAll('.toolbar, .editColumn');
+  const previousDisplay = [];
+  elementsToHide.forEach(el => {
+    previousDisplay.push(el.style.display);
+    el.style.display = 'none';
+  });
+
+  const opt = {
+    margin: 5,
+    filename: 'Invoice.pdf',
+    image: { type: 'jpeg', quality: 1 },
+    html2canvas: { scale: 3, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+  };
+
+  html2pdf().set(opt).from(invoiceEl).save().then(() => {
+    // Restore elements
+    elementsToHide.forEach((el, idx) => {
+      el.style.display = previousDisplay[idx] || '';
+    });
+
+    // Restore original styling
+    invoiceEl.style.width = prevWidth;
+    invoiceEl.style.maxWidth = prevMaxWidth;
+    invoiceEl.style.overflow = prevOverflow;
+  });
+};
+
+document.getElementById('printInvoice').onclick = () => window.print();
 </script>
 </body>
 </html>
+
